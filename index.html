@@ -1,0 +1,1605 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Ngư Thời Quang - Dự Báo Giờ Cá Ăn Miền Bắc (Real-Time FishCast)</title>
+  
+  <!-- PWA & Mobile Standalone Tags -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Ngư Thời Quang">
+  <meta name="theme-color" content="#070d19">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23070d19'/><circle cx='50' cy='50' r='42' fill='none' stroke='%2306b6d4' stroke-width='4'/><text x='50' y='65' font-size='50' text-anchor='middle'>🐟</text></svg>">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23070d19'/><circle cx='50' cy='50' r='42' fill='none' stroke='%2306b6d4' stroke-width='4'/><text x='50' y='65' font-size='50' text-anchor='middle'>🐟</text></svg>">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            deepNavy: '#070d19',
+            cardBg: '#0f172a',
+            cardBorder: '#1e293b',
+            sonarGreen: '#10b981',
+            sonarCyan: '#06b6d4',
+            amberGold: '#f59e0b',
+            radarRed: '#ef4444'
+          },
+          fontFamily: {
+            sans: ['Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom Scrollbar & Radar Glow */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #070d19; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #06b6d4; }
+
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.8; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.05); }
+    }
+    .animate-glow { animation: pulse-glow 3s infinite ease-in-out; }
+
+    @keyframes radar-sweep {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .radar-sweep-line {
+      transform-origin: center center;
+      animation: radar-sweep 5s linear infinite;
+    }
+
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(56, 189, 248, 0.15);
+    }
+    .glass-panel:hover {
+      border-color: rgba(6, 182, 212, 0.4);
+    }
+    .card-clock-text { font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body class="bg-[#070d19] text-slate-100 min-h-screen antialiased selection:bg-cyan-500 selection:text-black">
+
+  <!-- TOP HEADER / NAV BAR -->
+  <header class="border-b border-slate-800 bg-[#0b1324]/90 sticky top-0 z-50 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+      
+      <!-- Logo & Title -->
+      <div class="flex items-center space-x-3">
+        <div class="relative w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-emerald-400 p-0.5 shadow-lg shadow-cyan-500/20">
+          <div class="w-full h-full bg-slate-900 rounded-[10px] flex items-center justify-center overflow-hidden">
+            <span class="text-xl">🐟</span>
+          </div>
+          <div class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-ping"></div>
+          <div class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full"></div>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-cyan-300 via-teal-200 to-emerald-400 bg-clip-text text-transparent">
+              NGƯ THỜI QUANG
+            </h1>
+            <span class="px-2 py-0.5 text-[11px] font-semibold bg-cyan-950/80 text-cyan-300 border border-cyan-800 rounded-full uppercase tracking-wider">
+              Bắc Bộ v2.0
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Dự báo giờ cá ăn thời gian thực qua Chiêm Tinh & Khí Tượng Miền Bắc</p>
+        </div>
+      </div>
+
+      <!-- Quick Location & Live Clock -->
+      <div class="flex flex-wrap items-center gap-3">
+        
+        <!-- Northern Vietnam Presets Selector -->
+        <div class="flex items-center space-x-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
+          <span class="text-cyan-400 text-sm">📍</span>
+          <select id="locationSelect" class="bg-transparent text-sm text-slate-200 font-medium focus:outline-none cursor-pointer">
+            <option value="21.0285,105.8542,Hà Nội (Hồ Tây, Sông Hồng)">Hà Nội (Hồ Tây, Sông Hồng)</option>
+            <option value="20.8166,105.3333,Hòa Bình (Lòng Hồ Sông Đà)">Hòa Bình (Hồ Sông Đà)</option>
+            <option value="21.7167,104.8833,Yên Bái (Hồ Thác Bà)">Yên Bái (Hồ Thác Bà)</option>
+            <option value="21.3167,105.2167,Phú Thọ (Ao Châu, Sông Lô)">Phú Thọ (Ao Châu, Sông Lô)</option>
+            <option value="20.8449,106.6881,Hải Phòng (Sông Cấm, Đồ Sơn)">Hải Phòng (Cửa Sông, Cảng)</option>
+            <option value="20.9505,107.0734,Quảng Ninh (Hạ Long, Yên Lập)">Quảng Ninh (Hồ Yên Lập)</option>
+            <option value="20.2506,105.9745,Ninh Bình (Đầm Vân Long, Sông Đáy)">Ninh Bình (Đầm Vân Long)</option>
+            <option value="20.4333,106.1667,Nam Định (Sông Đào, Cồn Lu)">Nam Định (Hạ lưu Sông Hồng)</option>
+            <option value="21.1861,106.0763,Bắc Ninh (Sông Cầu, Sông Đuống)">Bắc Ninh (Sông Cầu, Đuống)</option>
+            <option value="21.3089,105.6049,Vĩnh Phúc (Hồ Đại Lải, Xạ Hương)">Vĩnh Phúc (Hồ Đại Lải)</option>
+          </select>
+          <button id="btnGps" title="Định vị GPS thực tế của bạn" class="ml-1 text-xs px-2 py-1 bg-cyan-700/60 hover:bg-cyan-600 text-cyan-200 rounded border border-cyan-500/50 flex items-center gap-1 transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            GPS
+          </button>
+        </div>
+
+        <!-- Ambient Sound Toggle -->
+        <button id="btnSound" class="bg-slate-800/80 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 text-xs text-slate-300 flex items-center gap-1.5 transition">
+          <span id="soundIcon">🔇</span>
+          <span id="soundLabel">Âm thanh hồ</span>
+        </button>
+
+        <!-- Current Live Clock -->
+        <div class="text-right hidden sm:block border-l border-slate-800 pl-3">
+          <div id="liveClock" class="text-sm font-mono font-bold text-cyan-300">--:--:--</div>
+          <div id="liveSolarDate" class="text-[11px] text-slate-400">Đang tải ngày...</div>
+        </div>
+
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- SUB-BANNER: CAN CHI & CHIÊM TINH HỌC HÔM NAY -->
+    <div class="glass-panel rounded-2xl p-4 shadow-xl border border-cyan-900/40 relative overflow-hidden">
+      <div class="absolute -right-16 -top-16 w-48 h-48 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none"></div>
+      
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold uppercase tracking-wider text-cyan-400">Chiêm Tinh & Lịch Âm Hôm Nay</span>
+        <span class="card-clock inline-flex items-center gap-1 whitespace-nowrap bg-slate-900/70 border border-cyan-900/60 text-cyan-300 font-mono text-[11px] px-2 py-0.5 rounded-full" data-format="full"><span>🕒</span><span class="card-clock-text">--:--:--</span></span>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
+        
+        <!-- Âm Lịch -->
+        <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+          <div class="text-[11px] uppercase tracking-wider text-slate-400">Âm Lịch Bắc Bộ</div>
+          <div id="lunarDateDisplay" class="text-base font-bold text-amber-400 mt-0.5">--/--</div>
+          <div id="lunarYearCanChi" class="text-xs text-slate-400">Năm --</div>
+        </div>
+
+        <!-- Can Chi Ngày & Mệnh -->
+        <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+          <div class="text-[11px] uppercase tracking-wider text-slate-400">Ngày Can Chi</div>
+          <div id="dayCanChiDisplay" class="text-base font-bold text-cyan-300 mt-0.5">--</div>
+          <div id="elementDisplay" class="text-xs text-slate-400">Ngũ hành: --</div>
+        </div>
+
+        <!-- 12 Trực Ngày -->
+        <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+          <div class="text-[11px] uppercase tracking-wider text-slate-400">Trực Ngày (Thủy Lợi)</div>
+          <div id="trucDisplay" class="text-base font-bold text-emerald-400 mt-0.5">Trực --</div>
+          <div id="trucEffect" class="text-xs text-emerald-300/80">--</div>
+        </div>
+
+        <!-- Pha Trăng (Solunar Phase) -->
+        <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+          <div class="text-[11px] uppercase tracking-wider text-slate-400">Pha Trăng / Thủy Triều</div>
+          <div class="flex items-center justify-center space-x-1.5 mt-0.5">
+            <span id="moonIcon" class="text-base">🌕</span>
+            <span id="moonPhaseName" class="text-base font-bold text-slate-100">--</span>
+          </div>
+          <div id="moonIllum" class="text-xs text-slate-400">Độ sáng: --%</div>
+        </div>
+
+        <!-- Hướng Xuất Hành (Cần Thủ May Mắn) -->
+        <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+          <div class="text-[11px] uppercase tracking-wider text-slate-400">Hướng Buông Cần</div>
+          <div id="directionDisplay" class="text-sm font-bold text-teal-300 mt-0.5">Tài Thần: --</div>
+          <div id="joyDirectionDisplay" class="text-xs text-slate-400">Hỷ Thần: --</div>
+        </div>
+
+        <!-- Tiết Khí Hiện Tại -->
+        <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+          <div class="text-[11px] uppercase tracking-wider text-slate-400">Tiết Khí Miền Bắc</div>
+          <div id="solarTermDisplay" class="text-base font-bold text-indigo-300 mt-0.5">--</div>
+          <div id="seasonTip" class="text-xs text-slate-400">Đặc tính: --</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- MAIN DASHBOARD: GAUGE & METEOROLOGY -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- LEFT COLUMN: REAL-TIME BITE SCORE GAUGE (5 cols) -->
+      <div class="lg:col-span-5 glass-panel rounded-2xl p-6 shadow-2xl flex flex-col justify-between relative overflow-hidden">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div>
+            <span class="text-xs font-semibold uppercase tracking-wider text-cyan-400">Chỉ Số Tổng Hợp</span>
+            <h2 class="text-lg font-bold text-slate-100">Đồng Hồ Cá Ăn Thời Gian Thực</h2>
+            <div id="liveStatusTag" class="text-[11px] text-emerald-400/80 mt-0.5">Đang cập nhật...</div>
+          </div>
+          <div class="card-clock flex flex-col items-end bg-emerald-950/60 text-emerald-300 border border-emerald-800/80 px-3 py-1.5 rounded-xl font-mono" data-format="stack">
+            <div class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="card-clock-time text-base font-bold">--:--:--</span>
+            </div>
+            <span class="card-clock-date text-[11px] text-emerald-400/80">--/--/----</span>
+          </div>
+        </div>
+
+        <!-- Circular Gauge Graphic -->
+        <div class="relative py-6 flex flex-col items-center justify-center">
+          <svg class="w-64 h-64 transform -rotate-90" viewBox="0 0 200 200">
+            <!-- Background Track -->
+            <circle cx="100" cy="100" r="82" fill="none" stroke="#1e293b" stroke-width="16" stroke-dasharray="386.4 128.8" stroke-dashoffset="0" stroke-linecap="round" />
+            <!-- Animated Colored Score Meter -->
+            <circle id="gaugeProgress" cx="100" cy="100" r="82" fill="none" stroke="url(#scoreGradient)" stroke-width="16" stroke-dasharray="386.4 128.8" stroke-dashoffset="386.4" stroke-linecap="round" class="transition-all duration-1000 ease-out" />
+            
+            <defs>
+              <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#ef4444" />
+                <stop offset="40%" stop-color="#f59e0b" />
+                <stop offset="70%" stop-color="#06b6d4" />
+                <stop offset="100%" stop-color="#10b981" />
+              </linearGradient>
+            </defs>
+          </svg>
+
+          <!-- Inside Gauge Text -->
+          <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+            <span class="text-xs uppercase font-semibold text-slate-400 tracking-wider">Tỷ Lệ Cá Đớp Mồi</span>
+            <div class="flex items-baseline justify-center">
+              <span id="scoreValue" class="text-5xl font-black tracking-tight text-white">--</span>
+              <span class="text-2xl font-bold text-cyan-400 ml-0.5">%</span>
+            </div>
+            <div id="scoreRating" class="mt-1 px-3 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-200 border border-slate-700">
+              Đang phân tích...
+            </div>
+          </div>
+        </div>
+
+        <!-- 5 Pillar Factor Breakdown -->
+        <div class="space-y-2.5 pt-4 border-t border-slate-800 text-xs">
+          <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-1">
+            5 Trụ Cột Tác Động (Chiêm Tinh + Khí Tượng)
+          </div>
+
+          <!-- 1. Barometric Pressure -->
+          <div>
+            <div class="flex justify-between text-slate-300 mb-1">
+              <span>Áp suất khí quyển (30%)</span>
+              <span id="factorPressureTxt" class="font-mono text-cyan-400">--%</span>
+            </div>
+            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div id="factorPressureBar" class="bg-cyan-500 h-full rounded-full transition-all duration-700" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- 2. Solunar Moon Phase -->
+          <div>
+            <div class="flex justify-between text-slate-300 mb-1">
+              <span>Pha trăng & Thuyết Solunar (25%)</span>
+              <span id="factorSolunarTxt" class="font-mono text-amber-400">--%</span>
+            </div>
+            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div id="factorSolunarBar" class="bg-amber-400 h-full rounded-full transition-all duration-700" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- 3. Wind & Waves -->
+          <div>
+            <div class="flex justify-between text-slate-300 mb-1">
+              <span>Gió & Mặt sóng hồ (20%)</span>
+              <span id="factorWindTxt" class="font-mono text-teal-400">--%</span>
+            </div>
+            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div id="factorWindBar" class="bg-teal-400 h-full rounded-full transition-all duration-700" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- 4. Water Temp & Season -->
+          <div>
+            <div class="flex justify-between text-slate-300 mb-1">
+              <span>Nhiệt độ & Mùa Bắc Bộ (15%)</span>
+              <span id="factorTempTxt" class="font-mono text-emerald-400">--%</span>
+            </div>
+            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div id="factorTempBar" class="bg-emerald-400 h-full rounded-full transition-all duration-700" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- 5. Astrology & Horary -->
+          <div>
+            <div class="flex justify-between text-slate-300 mb-1">
+              <span>Giờ Hoàng Đạo & Trực ngày (10%)</span>
+              <span id="factorAstroTxt" class="font-mono text-purple-400">--%</span>
+            </div>
+            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div id="factorAstroBar" class="bg-purple-400 h-full rounded-full transition-all duration-700" style="width: 0%"></div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN: WEATHER RADAR & SOLUNAR CRITICAL WINDOWS (7 cols) -->
+      <div class="lg:col-span-7 space-y-6">
+
+        <!-- REAL-TIME WEATHER TELEMETRY CARDS -->
+        <div class="glass-panel rounded-2xl p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
+            <div class="flex items-center space-x-2">
+              <span class="text-cyan-400">⚡</span>
+              <h3 class="font-bold text-slate-100 text-sm">Trắc Lượng Khí Tượng Miền Bắc (Live Sensor)</h3>
+            </div>
+            <div class="flex flex-col items-end gap-1">
+              <span class="card-clock inline-flex items-center gap-1 whitespace-nowrap bg-slate-900/70 border border-cyan-900/60 text-cyan-300 font-mono text-[11px] px-2 py-0.5 rounded-full" data-format="short"><span>🕒</span><span class="card-clock-text">--:--:--</span></span>
+              <div id="weatherSourceBadge" class="text-[11px] text-slate-400">
+                Nguồn: Open-Meteo High-Res API
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            
+            <!-- Pressure Card -->
+            <div class="p-3 bg-slate-900/70 rounded-xl border border-slate-800">
+              <div class="text-[11px] text-slate-400">Áp Suất Khí Quyển</div>
+              <div class="flex items-baseline space-x-1 mt-1">
+                <span id="valPressure" class="text-xl font-bold text-cyan-300">--</span>
+                <span class="text-xs text-slate-400">hPa</span>
+              </div>
+              <div id="pressureEval" class="text-[11px] text-emerald-400 mt-1 font-medium">--</div>
+            </div>
+
+            <!-- Wind Card -->
+            <div class="p-3 bg-slate-900/70 rounded-xl border border-slate-800">
+              <div class="text-[11px] text-slate-400">Gió & Hướng Gió</div>
+              <div class="flex items-baseline space-x-1 mt-1">
+                <span id="valWindSpeed" class="text-xl font-bold text-teal-300">--</span>
+                <span class="text-xs text-slate-400">km/h</span>
+              </div>
+              <div id="windDirEval" class="text-[11px] text-teal-300 mt-1 font-medium">--</div>
+            </div>
+
+            <!-- Temperature Card -->
+            <div class="p-3 bg-slate-900/70 rounded-xl border border-slate-800">
+              <div class="text-[11px] text-slate-400">Nhiệt Độ Không Khí</div>
+              <div class="flex items-baseline space-x-1 mt-1">
+                <span id="valTemp" class="text-xl font-bold text-amber-300">--</span>
+                <span class="text-xs text-slate-400">°C</span>
+              </div>
+              <div id="tempEval" class="text-[11px] text-slate-400 mt-1 font-medium">--</div>
+            </div>
+
+            <!-- Humidity Card -->
+            <div class="p-3 bg-slate-900/70 rounded-xl border border-slate-800">
+              <div class="text-[11px] text-slate-400">Độ Ẩm & Sương Mù</div>
+              <div class="flex items-baseline space-x-1 mt-1">
+                <span id="valHumidity" class="text-xl font-bold text-indigo-300">--</span>
+                <span class="text-xs text-slate-400">%</span>
+              </div>
+              <div id="humidityEval" class="text-[11px] text-slate-400 mt-1 font-medium">--</div>
+            </div>
+
+          </div>
+
+          <!-- Barometric Impact Analysis for Northern Vietnam Anglers -->
+          <div class="mt-4 p-3 bg-cyan-950/30 rounded-xl border border-cyan-900/50 flex items-start space-x-3">
+            <span class="text-lg">💡</span>
+            <div class="text-xs text-slate-300 leading-relaxed">
+              <strong class="text-cyan-300">Nhận định khí tượng chuyên sâu:</strong>
+              <span id="meteorologySummary">Đang tổng hợp dữ liệu khí áp và gió hồ...</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- SOLUNAR CRITICAL FEEDING WINDOWS (MAJOR & MINOR PERIODS) -->
+        <div class="glass-panel rounded-2xl p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
+            <div class="flex items-center space-x-2">
+              <span class="text-amber-400">🌕</span>
+              <h3 class="font-bold text-slate-100 text-sm">4 Khung Giờ Ăn Vàng Trong Ngày (Thuyết Solunar)</h3>
+            </div>
+            <div class="flex flex-col items-end gap-1">
+              <span class="card-clock inline-flex items-center gap-1 whitespace-nowrap bg-slate-900/70 border border-cyan-900/60 text-cyan-300 font-mono text-[11px] px-2 py-0.5 rounded-full" data-format="short"><span>🕒</span><span class="card-clock-text">--:--:--</span></span>
+              <span class="text-[11px] text-amber-400/90 font-medium">Mặt Trăng & Thủy Triều</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            
+            <!-- Major 1 (Moon Transit / Thiên Đỉnh) -->
+            <div class="p-3.5 bg-gradient-to-br from-amber-950/40 to-slate-900 rounded-xl border border-amber-800/40 relative">
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-bold text-amber-400 flex items-center gap-1">
+                  ⭐ KHUNG CHÍNH 1 (MAJOR)
+                </span>
+                <span class="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono">Đỉnh Thiên Đỉnh</span>
+              </div>
+              <div id="solunarMajor1" class="text-lg font-mono font-black text-amber-200 mt-1">--:-- - --:--</div>
+              <p class="text-[11px] text-slate-400 mt-1">Mặt trăng ở đỉnh đầu: Cá ăn hung hăng, tích cực rà đáy sục bùn tìm mồi.</p>
+            </div>
+
+            <!-- Major 2 (Moon Underfoot / Hạ Đỉnh) -->
+            <div class="p-3.5 bg-gradient-to-br from-amber-950/40 to-slate-900 rounded-xl border border-amber-800/40 relative">
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-bold text-amber-400 flex items-center gap-1">
+                  ⭐ KHUNG CHÍNH 2 (MAJOR)
+                </span>
+                <span class="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono">Chân Thiên Đỉnh</span>
+              </div>
+              <div id="solunarMajor2" class="text-lg font-mono font-black text-amber-200 mt-1">--:-- - --:--</div>
+              <p class="text-[11px] text-slate-400 mt-1">Mặt trăng đối đỉnh bên kia địa cầu: Kỳ hút thứ hai, cá nổi tầng lửng gom đàn.</p>
+            </div>
+
+            <!-- Minor 1 (Moonrise / Trăng Mọc) -->
+            <div class="p-3.5 bg-slate-900/70 rounded-xl border border-slate-800">
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-bold text-cyan-400 flex items-center gap-1">
+                  ✨ KHUNG PHỤ 1 (MINOR)
+                </span>
+                <span class="text-[10px] bg-cyan-950 text-cyan-300 px-1.5 py-0.5 rounded font-mono">Trăng Mọc</span>
+              </div>
+              <div id="solunarMinor1" class="text-base font-mono font-bold text-cyan-200 mt-1">--:-- - --:--</div>
+              <p class="text-[11px] text-slate-400 mt-1">Giao điểm chuyển giao ánh sáng: Cá nhỏ tụ lại, cá săn mồi bắt đầu rượt đuổi.</p>
+            </div>
+
+            <!-- Minor 2 (Moonset / Trăng Lặn) -->
+            <div class="p-3.5 bg-slate-900/70 rounded-xl border border-slate-800">
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-bold text-cyan-400 flex items-center gap-1">
+                  ✨ KHUNG PHỤ 2 (MINOR)
+                </span>
+                <span class="text-[10px] bg-cyan-950 text-cyan-300 px-1.5 py-0.5 rounded font-mono">Trăng Lặn</span>
+              </div>
+              <div id="solunarMinor2" class="text-base font-mono font-bold text-cyan-200 mt-1">--:-- - --:--</div>
+              <p class="text-[11px] text-slate-400 mt-1">Thời điểm chạng vạng thủy vực: Cá tranh thủ cắn mồi nhanh trước khi nghỉ ngơi.</p>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- 24-HOUR BITE TIME TIMELINE RADAR (HORIZONTAL BAR) -->
+    <div class="glass-panel rounded-2xl p-6 shadow-xl">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800">
+        <div>
+          <span class="text-xs font-semibold uppercase tracking-wider text-cyan-400">Bản Đồ Thời Gian 24H</span>
+          <h3 class="text-lg font-bold text-slate-100">Chi Tiết Từng Giờ Cắn Câu Hôm Nay (00:00 - 23:00)</h3>
+          <div class="mt-1"><span class="card-clock inline-flex items-center gap-1 whitespace-nowrap bg-slate-900/70 border border-cyan-900/60 text-cyan-300 font-mono text-[11px] px-2 py-0.5 rounded-full" data-format="full"><span>🕒</span><span class="card-clock-text">--:--:--</span></span></div>
+        </div>
+
+        <!-- Legend -->
+        <div class="flex flex-wrap items-center gap-4 text-xs">
+          <div class="flex items-center gap-1.5">
+            <span class="w-3 h-3 rounded bg-emerald-500"></span>
+            <span class="text-slate-300">Ăn cực mạnh (&ge;80%)</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="w-3 h-3 rounded bg-cyan-500"></span>
+            <span class="text-slate-300">Khá tốt (65-79%)</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="w-3 h-3 rounded bg-amber-500"></span>
+            <span class="text-slate-300">Trung bình (50-64%)</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="w-3 h-3 rounded bg-slate-700"></span>
+            <span class="text-slate-400">Kém (&lt;50%)</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-amber-400 font-bold">👑</span>
+            <span class="text-amber-300">Giờ Hoàng Đạo</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scrollable Timeline Bars Container -->
+      <div class="overflow-x-auto pb-3 pt-2">
+        <div id="timeline24h" class="flex gap-2 min-w-[980px]">
+          <!-- Injected via JavaScript -->
+        </div>
+      </div>
+
+      <!-- Selected Hour Popup / Details -->
+      <div id="hourDetailBox" class="mt-4 p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-xs flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center space-x-3">
+          <div id="hdBadge" class="px-2.5 py-1 rounded-lg bg-emerald-950 text-emerald-400 font-bold text-sm border border-emerald-800">
+            Giờ hiện tại
+          </div>
+          <div>
+            <div id="hdTitle" class="text-sm font-bold text-slate-100">Đang chọn: Giờ Hiện Tại</div>
+            <div id="hdDesc" class="text-slate-400">Click vào bất kỳ cột giờ nào ở trên để xem dự báo chi tiết.</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-4 font-mono">
+          <div>Áp suất: <span id="hdPressure" class="text-cyan-400 font-bold">-- hPa</span></div>
+          <div>Nhiệt độ: <span id="hdTemp" class="text-amber-400 font-bold">--°C</span></div>
+          <div>Gió: <span id="hdWind" class="text-teal-400 font-bold">-- km/h</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- SPECIES TARGETING ADVISORY (LOÀI CÁ BẮC BỘ) -->
+    <div class="glass-panel rounded-2xl p-6 shadow-xl">
+      <div class="flex items-center justify-between mb-5 pb-3 border-b border-slate-800">
+        <div>
+          <span class="text-xs font-semibold uppercase tracking-wider text-cyan-400">Cẩm Nang Ngư Nghiệp Bắc Bộ</span>
+          <h3 class="text-lg font-bold text-slate-100">Chiến Thuật & Mồi Câu Từng Loài Hôm Nay</h3>
+        </div>
+        <div class="flex flex-col items-end gap-1">
+          <span class="card-clock inline-flex items-center gap-1 whitespace-nowrap bg-slate-900/70 border border-cyan-900/60 text-cyan-300 font-mono text-[11px] px-2 py-0.5 rounded-full" data-format="full"><span>🕒</span><span class="card-clock-text">--:--:--</span></span>
+          <span class="text-xs text-slate-400">Tối ưu cho Chép, Trắm Đen, Trắm Cỏ, Rô Phi, Trôi</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="speciesCardsContainer">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- AUSPICIOUS HOURS (GIỜ HOÀNG ĐẠO BẮC BỘ) & PLANNING TOOL -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Giờ Hoàng Đạo trong ngày (7 cols) -->
+      <div class="lg:col-span-7 glass-panel rounded-2xl p-6 shadow-xl">
+        <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
+          <div class="flex items-center space-x-2">
+            <span class="text-amber-400">👑</span>
+            <h3 class="font-bold text-slate-100 text-sm">Bảng Giờ Hoàng Đạo Cần Thủ Xuất Hành (Hôm Nay)</h3>
+          </div>
+          <div class="flex flex-col items-end gap-1">
+            <span class="card-clock inline-flex items-center gap-1 whitespace-nowrap bg-slate-900/70 border border-cyan-900/60 text-cyan-300 font-mono text-[11px] px-2 py-0.5 rounded-full" data-format="short"><span>🕒</span><span class="card-clock-text">--:--:--</span></span>
+            <span class="text-xs text-amber-400 font-medium">Bát Trạch Cổ Truyền</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5" id="auspiciousHoursGrid">
+          <!-- Rendered by JS -->
+        </div>
+
+        <div class="mt-4 p-3 bg-slate-900/60 rounded-xl border border-slate-800 text-xs text-slate-400 leading-relaxed">
+          <strong class="text-amber-300">Lời khuyên xuất hành:</strong> Đi câu vào các khung giờ <span class="text-emerald-400 font-semibold">Hoàng Đạo</span> (đặc biệt là giờ có sao Thanh Long, Kim Quỹ, Bảo Quang) kết hợp trùng với khung giờ <span class="text-cyan-400 font-semibold">Solunar Major</span> là "Thời Khắc Vàng Khắc Tinh Của Cá Củ".
+        </div>
+      </div>
+
+      <!-- Trip Date Picker (5 cols) -->
+      <div class="lg:col-span-5 glass-panel rounded-2xl p-6 shadow-xl flex flex-col justify-between">
+        <div>
+          <div class="flex items-center space-x-2 mb-2 pb-2 border-b border-slate-800">
+            <span class="text-cyan-400">📅</span>
+            <h3 class="font-bold text-slate-100 text-sm">Lên Lịch Chuyến Đi Câu (Trip Planner)</h3>
+            <span class="ml-auto"><span class="card-clock inline-flex items-center gap-1 whitespace-nowrap bg-slate-900/70 border border-cyan-900/60 text-cyan-300 font-mono text-[11px] px-2 py-0.5 rounded-full" data-format="short"><span>🕒</span><span class="card-clock-text">--:--:--</span></span></span>
+          </div>
+          <p class="text-xs text-slate-400 mb-4">
+            Tra cứu trước ngày mai, cuối tuần hoặc bất kỳ ngày nào để xem ngày tốt, trực ngày, pha trăng và lên kế hoạch làm mồi ổ.
+          </p>
+
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Chọn Ngày Đi Câu:</label>
+              <input type="date" id="tripDatePicker" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-cyan-300 font-mono focus:outline-none focus:border-cyan-500">
+            </div>
+
+            <!-- Quick Buttons -->
+            <div class="flex gap-2 text-xs">
+              <button id="btnPickToday" class="flex-1 py-1.5 bg-cyan-900/60 hover:bg-cyan-800 text-cyan-200 rounded border border-cyan-700 transition">
+                Hôm Nay
+              </button>
+              <button id="btnPickTomorrow" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition">
+                Ngày Mai
+              </button>
+              <button id="btnPickWeekend" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition">
+                Cuối Tuần Này
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Note on Northern Microclimate -->
+        <div class="mt-6 p-3 bg-cyan-950/40 rounded-xl border border-cyan-800/40 text-[11px] text-slate-300 leading-relaxed">
+          🌊 <strong>Mẹo câu Bắc Bộ:</strong> Tháng 9 - 10 âm lịch là mùa heo may, cá chép và trắm đen tích cực gom mỡ chuẩn bị đón đông lạnh. Canh những ngày trước đợt gió mùa đông bắc 1-2 ngày để buông cần sẽ có kết quả bất ngờ!
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="mt-12 border-t border-slate-800 bg-slate-950/80 py-6 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div>
+        <strong class="text-slate-400">NGƯ THỜI QUANG</strong> — Hệ thống thuật toán tích hợp Thiên Văn Solunar, Lịch Vạn Niên Hồ Ngọc Đức & Dữ Liệu Khí Tượng Bắc Bộ.
+      </div>
+      <div>
+        Bản quyền &copy; 2026. Thiết kế chuyên biệt cho Cần Thủ Việt Nam.
+      </div>
+    </div>
+  </footer>
+
+  <!-- SCRIPT LOGIC (ASTRONOMY + LUNAR + SOLUNAR + OPEN-METEO + AUDIO) -->
+  <script>
+    /* =====================================================================
+     * 1. THUẬT TOÁN ÂM LỊCH VIỆT NAM (CHUẨN HỒ NGỌC ĐỨC - GMT+7)
+     * ===================================================================== */
+    function jdFromDate(dd, mm, yy) {
+      let y = yy, m = mm;
+      if (m <= 2) { y -= 1; m += 12; }
+      let a = Math.floor(y / 100);
+      let b = 2 - a + Math.floor(a / 4);
+      return Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + dd + b - 1524; // JDN số nguyên (chuẩn Hồ Ngọc Đức)
+    }
+
+    function getNewMoonDay(k, timeZone = 7.0) {
+      let t = k / 1236.85;
+      let t2 = t * t;
+      let t3 = t2 * t;
+      let dr = Math.PI / 180;
+      let jde = 2415020.75933 + 29.53058868 * k + 0.0001178 * t2 - 0.000000155 * t3;
+      jde += 0.00033 * Math.sin((166.56 + 132.87 * t - 0.009173 * t2) * dr);
+      let m = 359.2242 + 29.10535608 * k - 0.0000333 * t2 - 0.00000347 * t3;
+      let mprime = 306.0253 + 385.81691806 * k + 0.0107306 * t2 + 0.00001236 * t3;
+      let f = 21.2964 + 390.67050646 * k - 0.0016528 * t2 - 0.00000239 * t3;
+      let c1 = (0.1734 - 0.000393 * t) * Math.sin(m * dr) + 0.0021 * Math.sin(2 * dr * m);
+      c1 -= 0.4068 * Math.sin(mprime * dr) + 0.0161 * Math.sin(2 * dr * mprime);
+      c1 -= 0.0004 * Math.sin(3 * dr * mprime);
+      c1 += 0.0104 * Math.sin(2 * dr * f) - 0.0051 * Math.sin((m + mprime) * dr);
+      c1 -= 0.0074 * Math.sin((m - mprime) * dr) + 0.0004 * Math.sin((2 * f + m) * dr);
+      c1 -= 0.0004 * Math.sin((2 * f - m) * dr) - 0.0006 * Math.sin((2 * f + mprime) * dr);
+      c1 += 0.0104 * Math.sin((2 * f - mprime) * dr) + 0.0005 * Math.sin((2 * mprime + m) * dr);
+      let deltat;
+      if (t < -11) {
+        deltat = 0.001 + 0.000839 * t + 0.0002261 * t2 - 0.00000845 * t3 - 0.000000081 * t * t3;
+      } else {
+        deltat = -0.000078 + 0.000424 * t + 0.0000373 * t2;
+      }
+      jde = jde + c1 - deltat;
+      return Math.floor(jde + 0.5 + timeZone / 24);
+    }
+
+    function getSunLongitude(dayNumber, timeZone = 7.0) {
+      let t = (dayNumber - 2451545.5 - timeZone / 24) / 36525;
+      let t2 = t * t;
+      let dr = Math.PI / 180;
+      let l0 = 280.46645 + 36000.76983 * t + 0.0003032 * t2;
+      let m = 357.52910 + 35999.05030 * t - 0.0001559 * t2 - 0.00000048 * t * t2;
+      let c = (1.914600 - 0.004817 * t - 0.000014 * t2) * Math.sin(m * dr);
+      c += (0.019993 - 0.000101 * t) * Math.sin(2 * m * dr) + 0.000290 * Math.sin(3 * m * dr);
+      let theta = l0 + c;
+      theta = theta - 360 * Math.floor(theta / 360);
+      return theta;
+    }
+
+    function getLunarMonth11(yy, timeZone = 7.0) {
+      let off = jdFromDate(31, 12, yy) - 2415021.076998695;
+      let k = Math.floor(off / 29.530588853);
+      let nm = getNewMoonDay(k, timeZone);
+      let sunLong = Math.floor(getSunLongitude(nm, timeZone) / 30);
+      if (sunLong >= 9) {
+        nm = getNewMoonDay(k - 1, timeZone);
+      }
+      return nm;
+    }
+
+    function getLeapMonthOffset(a11, timeZone = 7.0) {
+      let k = Math.floor(0.5 + (a11 - 2415021.076998695) / 29.530588853);
+      let last = 0;
+      let i = 1;
+      let arc = Math.floor(getSunLongitude(getNewMoonDay(k + i, timeZone), timeZone) / 30);
+      do {
+        last = arc;
+        i++;
+        arc = Math.floor(getSunLongitude(getNewMoonDay(k + i, timeZone), timeZone) / 30);
+      } while (arc !== last && i < 14);
+      return i - 1;
+    }
+
+    function convertSolar2Lunar(dd, mm, yy, timeZone = 7.0) {
+      let dayNumber = jdFromDate(dd, mm, yy);
+      let k = Math.floor((dayNumber - 2415021.076998695) / 29.530588853);
+      let monthStart = getNewMoonDay(k + 1, timeZone);
+      if (monthStart > dayNumber) {
+        monthStart = getNewMoonDay(k, timeZone);
+      } else {
+        k += 1;
+      }
+      let a11 = getLunarMonth11(yy, timeZone);
+      let b11 = a11;
+      let lunarYear;
+      if (a11 >= monthStart) {
+        lunarYear = yy;
+        a11 = getLunarMonth11(yy - 1, timeZone);
+      } else {
+        lunarYear = yy + 1;
+        b11 = getLunarMonth11(yy + 1, timeZone);
+      }
+      let lunarDay = Math.floor(dayNumber - monthStart + 1);
+      let diff = Math.floor((monthStart - a11) / 29);
+      let lunarLeap = 0;
+      let lunarMonth = diff + 11;
+      if (b11 - a11 > 365) {
+        let leapMonthDiff = getLeapMonthOffset(a11, timeZone);
+        if (diff >= leapMonthDiff) {
+          lunarMonth = diff + 10;
+          if (diff === leapMonthDiff) lunarLeap = 1;
+        }
+      }
+      if (lunarMonth > 12) lunarMonth -= 12;
+      if (lunarMonth >= 11 && diff < 4) lunarYear -= 1;
+      return [lunarDay, lunarMonth, lunarYear, lunarLeap];
+    }
+
+    /* =====================================================================
+     * 2. CAN CHI, NGŨ HÀNH, 12 TRỰC & GIỜ HOÀNG ĐẠO
+     * ===================================================================== */
+    const CANS = ['Giáp', 'Ất', 'Bính', 'Đinh', 'Mậu', 'Kỷ', 'Canh', 'Tân', 'Nhâm', 'Quý'];
+    const CHIS = ['Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tỵ', 'Ngọ', 'Mùi', 'Thân', 'Dậu', 'Tuất', 'Hợi'];
+    const CHI_HOURS = [
+      '23:00 - 01:00', '01:00 - 03:00', '03:00 - 05:00', '05:00 - 07:00',
+      '07:00 - 09:00', '09:00 - 11:00', '11:00 - 13:00', '13:00 - 15:00',
+      '15:00 - 17:00', '17:00 - 19:00', '19:00 - 21:00', '21:00 - 23:00'
+    ];
+    
+    const TRUCS = [
+      { name: 'Kiến', score: 8, tip: 'Khởi đầu, cá bắt đầu rà ổ mồi' },
+      { name: 'Trừ', score: 5, tip: 'Trừ cũ đổi mới, cá kén mồi hơn' },
+      { name: 'Mãn', score: 15, tip: 'Đầy tràn viên mãn! TỐI ƯU CÂU CÁ' },
+      { name: 'Bình', score: 8, tip: 'Bình hòa, cá đi ăn đều rải rác' },
+      { name: 'Định', score: 12, tip: 'Yên định, cá tụ đàn trong ổ câu' },
+      { name: 'Chấp', score: 6, tip: 'Nắm giữ, cá nằm vùng đáy sâu' },
+      { name: 'Phá', score: -10, tip: 'Động nước, xung phá, cá dễ giật mình' },
+      { name: 'Nguy', score: -5, tip: 'Nguy nan, sóng gió lớn, cá trốn ngách' },
+      { name: 'Thành', score: 13, tip: 'Thành công tốt đẹp! Dễ săn cá to' },
+      { name: 'Thâu', score: 10, tip: 'Thu hoạch, cá dính lưỡi bền chặt' },
+      { name: 'Khai', score: 15, tip: 'Khai thông hang hốc! CÁ ĂN CỰC MẠNH' },
+      { name: 'Bế', score: -10, tip: 'Bế tắc, cá ngậm tăm lười cắn mồi' }
+    ];
+
+    // Tra cứu Giờ Hoàng Đạo theo Chi của ngày
+    const AUSPICIOUS_TABLE = {
+      0: [0, 1, 3, 6, 8, 9],    // Tý: Tý, Sửu, Mão, Ngọ, Thân, Dậu
+      6: [0, 1, 3, 6, 8, 9],    // Ngọ
+      1: [2, 3, 5, 8, 10, 11],  // Sửu: Dần, Mão, Tỵ, Thân, Tuất, Hợi
+      7: [2, 3, 5, 8, 10, 11],  // Mùi
+      2: [0, 1, 4, 5, 7, 10],   // Dần: Tý, Sửu, Thìn, Tỵ, Mùi, Tuất
+      8: [0, 1, 4, 5, 7, 10],   // Thân
+      3: [0, 2, 3, 6, 7, 9],    // Mão: Tý, Dần, Mão, Ngọ, Mùi, Dậu
+      9: [0, 2, 3, 6, 7, 9],    // Dậu
+      4: [2, 4, 5, 8, 9, 11],   // Thìn: Dần, Thìn, Tỵ, Thân, Dậu, Hợi
+      10: [2, 4, 5, 8, 9, 11],  // Tuất
+      5: [1, 4, 6, 7, 10, 11],  // Tỵ: Sửu, Thìn, Ngọ, Mùi, Tuất, Hợi
+      11: [1, 4, 6, 7, 10, 11]  // Hợi
+    };
+
+    // Hướng xuất hành theo Can Ngày
+    const DIRECTIONS = {
+      0: { tai: 'Đông Nam', hy: 'Đông Bắc' }, // Giáp
+      1: { tai: 'Chính Đông', hy: 'Tây Bắc' }, // Ất
+      2: { tai: 'Chính Đông', hy: 'Tây Nam' }, // Bính
+      3: { tai: 'Chính Tây', hy: 'Chính Nam' }, // Đinh
+      4: { tai: 'Chính Bắc', hy: 'Đông Nam' }, // Mậu
+      5: { tai: 'Đông Nam', hy: 'Đông Bắc' }, // Kỷ
+      6: { tai: 'Chính Đông', hy: 'Tây Bắc' }, // Canh
+      7: { tai: 'Chính Đông', hy: 'Tây Nam' }, // Tân
+      8: { tai: 'Chính Tây', hy: 'Chính Nam' }, // Nhâm
+      9: { tai: 'Chính Bắc', hy: 'Đông Nam' }  // Quý
+    };
+
+    const SOLAR_TERMS = [
+      { name: 'Xuân Phân', tip: 'Cá thức sau đông, tìm nắng ấm ven bờ' },
+      { name: 'Thanh Minh', tip: 'Mưa xuân lất phất, trắm chép đi ăn mạnh' },
+      { name: 'Cốc Vũ', tip: 'Nước dồi dào, cá rô phi làm tổ' },
+      { name: 'Lập Hạ', tip: 'Nắng ấm đầu hè, cá ăn tầng lửng' },
+      { name: 'Tiểu Mãn', tip: 'Nước sông dâng, cá đón nước mới' },
+      { name: 'Mang Chủng', tip: 'Nắng gắt, câu đêm và sáng sớm' },
+      { name: 'Hạ Chí', tip: 'Tránh nắng trưa, săn hàng ban đêm' },
+      { name: 'Tiểu Thử', tip: 'Nóng nực oi bức, chú ý thiếu oxy mặt nước' },
+      { name: 'Đại Thử', tip: 'Nước ấm đáy sâu, câu tầng đáy' },
+      { name: 'Lập Thu', tip: 'Gió thu mát lành, cá chép vỗ béo' },
+      { name: 'Xử Thử', tip: 'Nước hồ trong vắt, dùng cước mảnh phao nhỏ' },
+      { name: 'Bạch Lộ', tip: 'Sương sớm nhiều, câu rạng sáng cực nhạy' },
+      { name: 'Thu Phân', tip: 'Thời tiết vàng, cá cắn cả ngày' },
+      { name: 'Hàn Lộ', tip: 'Heo may se lạnh, chép trắm ăn tích cực' },
+      { name: 'Sương Giáng', tip: 'Trước đợt rét, cá ăn vét dồn dập' },
+      { name: 'Lập Đông', tip: 'Chớm đông lạnh, cần mồi ủ nồng thơm đạm' },
+      { name: 'Tiểu Tuyết', tip: 'Nước lạnh đáy sâu, trưa hửng nắng mới ăn' },
+      { name: 'Đại Tuyết', tip: 'Rét buốt, cá ngậm miệng, săn trắm đen ốc' },
+      { name: 'Đông Chí', tip: 'Đáy hồ ấm hơn mặt hồ, đánh sâu 3-5m' },
+      { name: 'Tiểu Hàn', tip: 'Rét đậm, cá co cụm hốc đá' },
+      { name: 'Đại Hàn', tip: 'Vào hang trú rét, hạn chế đánh ổ lớn' },
+      { name: 'Lập Xuân', tip: 'Khí xuân ấm dần, cá trôi chép cựa quậy' },
+      { name: 'Vũ Thủy', tip: 'Mưa phùn xuân, cá nổi tăm liên tục' },
+      { name: 'Kinh Trập', tip: 'Sấm xuân rền, cá bừng tỉnh săn mồi' }
+    ];
+
+    /* =====================================================================
+     * 3. STATE CỦA ỨNG DỤNG
+     * ===================================================================== */
+    let currentSelectedDate = new Date(); // Mặc định: ngày hôm nay
+    let currentLat = 21.0285;
+    let currentLon = 105.8542;
+    let currentLocationName = "Hà Nội (Hồ Tây, Sông Hồng)";
+    let liveWeatherData = null;
+    let audioCtx = null;
+    let isSoundPlaying = false;
+    let waterNoiseNode = null;
+
+    /* =====================================================================
+     * 4. TÍNH TOÁN THIÊN VĂN & KHÍ TƯỢNG ĐẶC THÙ BẮC BỘ
+     * ===================================================================== */
+    function calculateAstroData(date) {
+      const dd = date.getDate();
+      const mm = date.getMonth() + 1;
+      const yy = date.getFullYear();
+
+      const [lunarDay, lunarMonth, lunarYear, lunarLeap] = convertSolar2Lunar(dd, mm, yy, 7.0);
+      const jd = jdFromDate(dd, mm, yy);
+
+      const canDayIdx = Math.floor(jd + 9) % 10;
+      const chiDayIdx = Math.floor(jd + 1) % 12;
+
+      const canYearIdx = (lunarYear + 6) % 10;
+      const chiYearIdx = (lunarYear + 8) % 12;
+
+      // Tính Chi Tháng Âm Lịch (Tháng 1 là Dần, 2 là Mão, v.v.)
+      const chiMonthIdx = (lunarMonth + 1) % 12;
+      
+      // 12 Trực: Vị trí Trực = (chiDayIdx - chiMonthIdx + 12) % 12
+      const trucIdx = (chiDayIdx - chiMonthIdx + 12) % 12;
+      const trucInfo = TRUCS[trucIdx];
+
+      // Pha Mặt Trăng & Tỷ lệ chiếu sáng
+      // Tuổi trăng xấp xỉ lunarDay
+      let moonAge = lunarDay;
+      let illumPct = Math.round((1 - Math.cos((lunarDay / 29.53) * 2 * Math.PI)) * 50);
+      let moonPhaseName = "Trăng Khuyết";
+      let moonIcon = "🌓";
+      let solunarBaseBonus = 15;
+
+      if (lunarDay === 1 || lunarDay === 30) {
+        moonPhaseName = "Trăng Non (Sóc)";
+        moonIcon = "🌑";
+        solunarBaseBonus = 30; // Nước cường rất tốt
+      } else if (lunarDay >= 14 && lunarDay <= 16) {
+        moonPhaseName = "Trăng Tròn (Rằm)";
+        moonIcon = "🌕";
+        solunarBaseBonus = 30; // Nước cường, sinh vật phù du cực mạnh
+      } else if (lunarDay >= 7 && lunarDay <= 8) {
+        moonPhaseName = "Thượng Huyền";
+        moonIcon = "🌓";
+        solunarBaseBonus = 12; // Nước kém
+      } else if (lunarDay >= 22 && lunarDay <= 23) {
+        moonPhaseName = "Hạ Huyền";
+        moonIcon = "🌗";
+        solunarBaseBonus = 12; // Nước kém
+      } else if (lunarDay > 1 && lunarDay < 7) {
+        moonPhaseName = "Trăng Lưỡi Liềm Đầu";
+        moonIcon = "🌒";
+        solunarBaseBonus = 20;
+      } else if (lunarDay > 8 && lunarDay < 14) {
+        moonPhaseName = "Trăng Tròn Dần";
+        moonIcon = "🌔";
+        solunarBaseBonus = 25;
+      } else if (lunarDay > 16 && lunarDay < 22) {
+        moonPhaseName = "Trăng Khuyết Dần";
+        moonIcon = "🌖";
+        solunarBaseBonus = 22;
+      } else {
+        moonPhaseName = "Trăng Tàn Cuối Tháng";
+        moonIcon = "🌘";
+        solunarBaseBonus = 18;
+      }
+
+      // Giờ Hoàng Đạo
+      const auspiciousHourIndices = AUSPICIOUS_TABLE[chiDayIdx] || [0, 2, 4, 6, 8, 10];
+
+      // Thuyết Solunar (Giờ Major & Minor):
+      // Moon Transit (Đỉnh đầu) = (12.0 + (lunarDay - 1) * 0.812) mod 24
+      let moonTransitHour = (12.0 + (lunarDay - 1) * 0.812) % 24;
+      let major1Center = moonTransitHour;
+      let major2Center = (moonTransitHour + 12) % 24;
+      let minor1Center = (moonTransitHour - 6 + 24) % 24;
+      let minor2Center = (moonTransitHour + 6) % 24;
+
+      function fmtRange(centerHour, durationHours = 2) {
+        let half = durationHours / 2;
+        let start = (centerHour - half + 24) % 24;
+        let end = (centerHour + half + 24) % 24;
+        let sH = Math.floor(start).toString().padStart(2, '0');
+        let sM = Math.floor((start % 1) * 60).toString().padStart(2, '0');
+        let eH = Math.floor(end).toString().padStart(2, '0');
+        let eM = Math.floor((end % 1) * 60).toString().padStart(2, '0');
+        return `${sH}:${sM} - ${eH}:${eM}`;
+      }
+
+      // Tiết Khí
+      let dayOfYear = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
+      let termIndex = Math.floor(((dayOfYear + 285) % 365) / 15.2) % 24;
+      let currentTerm = SOLAR_TERMS[termIndex] || SOLAR_TERMS[13];
+
+      // Hướng
+      let dirs = DIRECTIONS[canDayIdx] || { tai: 'Đông Nam', hy: 'Đông Bắc' };
+
+      return {
+        lunarDay, lunarMonth, lunarYear, lunarLeap,
+        canDay: CANS[canDayIdx], chiDay: CHIS[chiDayIdx],
+        canYear: CANS[canYearIdx], chiYear: CHIS[chiYearIdx],
+        trucInfo,
+        moonAge, illumPct, moonPhaseName, moonIcon, solunarBaseBonus,
+        major1Center, major2Center, minor1Center, minor2Center,
+        major1Text: fmtRange(major1Center, 2),
+        major2Text: fmtRange(major2Center, 2),
+        minor1Text: fmtRange(minor1Center, 1.2),
+        minor2Text: fmtRange(minor2Center, 1.2),
+        auspiciousHourIndices,
+        currentTerm,
+        dirs
+      };
+    }
+
+    /* =====================================================================
+     * 5. TÍCH HỢP LIVE WEATHER TỪ OPEN-METEO
+     * ===================================================================== */
+    async function fetchWeather(lat, lon) {
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,wind_direction_10m,weather_code&hourly=temperature_2m,surface_pressure,wind_speed_10m,relative_humidity_2m&timezone=Asia%2FBangkok`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Network error");
+        const data = await res.json();
+        return data;
+      } catch (err) {
+        console.warn("Dùng dữ liệu khí tượng mô phỏng Bắc Bộ:", err);
+        // Fallback realistic weather data for Northern Vietnam autumn/winter
+        return {
+          current: {
+            temperature_2m: 25.4,
+            relative_humidity_2m: 82,
+            surface_pressure: 1014.2,
+            wind_speed_10m: 9.5,
+            wind_direction_10m: 140, // Đông Nam (Gió nồm mát mẻ)
+          },
+          hourly: {
+            time: Array.from({length: 24}, (_, i) => `${i.toString().padStart(2, '0')}:00`),
+            temperature_2m: [22, 21.5, 21, 20.8, 20.5, 21, 23, 25, 27, 28.5, 29, 29.5, 29, 28, 27, 26, 25, 24.5, 24, 23.5, 23, 22.8, 22.5, 22.2],
+            surface_pressure: [1015, 1014.8, 1014.5, 1014.2, 1014, 1014.5, 1015, 1015.5, 1015, 1014.5, 1013.8, 1013.5, 1013.2, 1013.5, 1014, 1014.5, 1015, 1015.2, 1015.5, 1015.8, 1016, 1015.8, 1015.5, 1015.2],
+            wind_speed_10m: [6, 5, 5, 4, 4, 6, 8, 11, 13, 14, 15, 14, 13, 12, 11, 9, 8, 8, 7, 7, 6, 6, 6, 5]
+          }
+        };
+      }
+    }
+
+    /* =====================================================================
+     * 6. CÔNG THỨC TÍNH ĐIỂM CÁ ĂN THỜI GIAN THỰC (FISH BITE INDEX)
+     * ===================================================================== */
+    function evaluateFeedingScore(astro, weather, hour) {
+      // 1. Áp suất khí quyển (Weight: 30%)
+      let p = weather.surface_pressure;
+      let pressureScore = 70;
+      let pressureEvalText = "Ổn định";
+
+      if (p >= 1011 && p <= 1017) {
+        pressureScore = 98; // Vàng cho Bắc Bộ
+        pressureEvalText = "Áp suất vàng (Rất thuận lợi)";
+      } else if (p > 1017 && p <= 1022) {
+        pressureScore = 80;
+        pressureEvalText = "Hơi cao (Cá ăn đáy sâu)";
+      } else if (p >= 1007 && p < 1011) {
+        pressureScore = 85;
+        pressureEvalText = "Chuẩn bị đón nước/dông (Ăn mạnh)";
+      } else if (p > 1022) {
+        pressureScore = 40;
+        pressureEvalText = "Quá cao (Sau rét đậm rét hại)";
+      } else {
+        pressureScore = 35;
+        pressureEvalText = "Quá thấp (Thiếu oxy ngạt nước)";
+      }
+
+      // 2. Gió & Sóng mặt nước (Weight: 20%)
+      let wSpd = weather.wind_speed_10m;
+      let wDir = weather.wind_direction_10m || 120;
+      let windScore = 60;
+      let windEvalText = "Gió nhẹ";
+
+      // Đánh giá tốc độ: 6 - 18 km/h là lý tưởng tạo sóng lăn tăn
+      if (wSpd >= 6 && wSpd <= 17) {
+        windScore = 95;
+        windEvalText = "Sóng lăn tăn lý tưởng (Cá dạn mồi)";
+      } else if (wSpd > 17 && wSpd <= 26) {
+        windScore = 70;
+        windEvalText = "Gió vừa (Sóng lớn ven bờ)";
+      } else if (wSpd < 4) {
+        windScore = 55;
+        windEvalText = "Mặt gương tĩnh (Cá nhát bóng)";
+      } else {
+        windScore = 30;
+        windEvalText = "Gió to giật mạnh (Dạt phao)";
+      }
+
+      // Hướng gió Bắc Bộ: Đông Nam (Nồm ấm) vs Đông Bắc (Bấc lạnh)
+      let dirText = "Đông Nam";
+      if (wDir >= 45 && wDir < 135) {
+        dirText = "Đông / Đông Nam (Gió nồm lành)";
+        windScore = Math.min(100, windScore + 10);
+      } else if (wDir >= 135 && wDir < 225) {
+        dirText = "Nam / Đông Nam (Ấm ẩm)";
+        windScore = Math.min(100, windScore + 5);
+      } else if (wDir >= 315 || wDir < 45) {
+        dirText = "Đông Bắc (Gió bấc se lạnh)";
+        windScore = Math.max(20, windScore - 5);
+      } else {
+        dirText = "Tây / Tây Nam (Gió phơn khô rát)";
+        windScore = Math.max(20, windScore - 15);
+      }
+
+      // 3. Nhiệt độ & Môi trường nước (Weight: 15%)
+      let temp = weather.temperature_2m;
+      let tempScore = 70;
+      let tempEvalText = "Bình thường";
+      if (temp >= 21 && temp <= 28) {
+        tempScore = 98;
+        tempEvalText = "Nhiệt độ vàng sinh thái";
+      } else if (temp >= 16 && temp < 21) {
+        tempScore = 80;
+        tempEvalText = "Se se lạnh (Ăn đạm thơm)";
+      } else if (temp > 28 && temp <= 33) {
+        tempScore = 65;
+        tempEvalText = "Hơi nóng (Tránh trưa gắt)";
+      } else if (temp < 15) {
+        tempScore = 40;
+        tempEvalText = "Rét hại (Cá ngậm miệng)";
+      } else {
+        tempScore = 30;
+        tempEvalText = "Nắng rát thiêu đốt";
+      }
+
+      // 4. Pha trăng & Solunar theo giờ hiện tại (Weight: 25%)
+      let solunarScore = astro.solunarBaseBonus * 2.2; // Base từ pha trăng (0 - 66)
+      
+      // Kiểm tra xem giờ này có rơi vào Major hoặc Minor không
+      let distMaj1 = Math.min(Math.abs(hour - astro.major1Center), 24 - Math.abs(hour - astro.major1Center));
+      let distMaj2 = Math.min(Math.abs(hour - astro.major2Center), 24 - Math.abs(hour - astro.major2Center));
+      let distMin1 = Math.min(Math.abs(hour - astro.minor1Center), 24 - Math.abs(hour - astro.minor1Center));
+      let distMin2 = Math.min(Math.abs(hour - astro.minor2Center), 24 - Math.abs(hour - astro.minor2Center));
+
+      let isMajor = (distMaj1 <= 1.0 || distMaj2 <= 1.0);
+      let isMinor = (distMin1 <= 0.7 || distMin2 <= 0.7);
+
+      if (isMajor) {
+        solunarScore += 30; // Trùng Major cực mạnh
+      } else if (isMinor) {
+        solunarScore += 18; // Trùng Minor khá
+      }
+      solunarScore = Math.min(100, Math.max(20, Math.round(solunarScore)));
+
+      // 5. Chiêm Tinh, Giờ Hoàng Đạo & Trực (Weight: 10%)
+      let chiHourIdx = Math.floor((hour + 1) % 24 / 2);
+      let isAuspicious = astro.auspiciousHourIndices.includes(chiHourIdx);
+      let astroScore = 60 + (isAuspicious ? 25 : 0) + astro.trucInfo.score;
+      astroScore = Math.min(100, Math.max(25, astroScore));
+
+      // TÍNH ĐIỂM TỔNG HỢP (FBI: 0 - 100)
+      let totalScore = Math.round(
+        pressureScore * 0.30 +
+        solunarScore * 0.25 +
+        windScore * 0.20 +
+        tempScore * 0.15 +
+        astroScore * 0.10
+      );
+      totalScore = Math.max(15, Math.min(99, totalScore));
+
+      let ratingText = "Trung Bình";
+      let ratingColor = "bg-amber-500/20 text-amber-300 border-amber-500/40";
+      if (totalScore >= 85) {
+        ratingText = "THỜI KHẮC VÀNG - CÁ CẮN PHAO ĐIÊN CUỒNG";
+        ratingColor = "bg-emerald-500/20 text-emerald-300 border-emerald-500/50";
+      } else if (totalScore >= 72) {
+        ratingText = "RẤT TỐT - DỄ NỔI Ổ, CẮN MẠNH";
+        ratingColor = "bg-cyan-500/20 text-cyan-300 border-cyan-500/50";
+      } else if (totalScore >= 55) {
+        ratingText = "TRUNG BÌNH - CẦN CÂU KỸ THUẬT";
+        ratingColor = "bg-amber-500/20 text-amber-300 border-amber-500/50";
+      } else {
+        ratingText = "KÉM - CÁ NGẬM MIỆNG (NÊN ĐỔI GIỜ)";
+        ratingColor = "bg-rose-500/20 text-rose-300 border-rose-500/50";
+      }
+
+      return {
+        totalScore,
+        ratingText,
+        ratingColor,
+        isMajor,
+        isMinor,
+        isAuspicious,
+        pressureScore,
+        solunarScore,
+        windScore,
+        tempScore,
+        astroScore,
+        pressureEvalText,
+        windEvalText,
+        dirText,
+        tempEvalText
+      };
+    }
+
+    /* =====================================================================
+     * 7. CẬP NHẬT GIAO DIỆN CHÍNH
+     * ===================================================================== */
+    async function updateDashboard() {
+      const now = currentSelectedDate;
+      const astro = calculateAstroData(now);
+
+      // Cập nhật Sub-banner Chiêm Tinh
+      document.getElementById('lunarDateDisplay').innerText = `Mùng ${astro.lunarDay} Tháng ${astro.lunarMonth}`;
+      document.getElementById('lunarYearCanChi').innerText = `Năm ${astro.canYear} ${astro.chiYear} ${astro.lunarLeap ? '(Nhuận)' : ''}`;
+      document.getElementById('dayCanChiDisplay').innerText = `${astro.canDay} ${astro.chiDay}`;
+      
+      // Ngũ hành nạp âm ước tính
+      let elementStr = "Hải Trung Kim";
+      if (astro.canDay.includes('Bính') || astro.canDay.includes('Đinh')) elementStr = "Lư Trung Hỏa";
+      if (astro.canDay.includes('Mậu') || astro.canDay.includes('Kỷ')) elementStr = "Đại Lâm Mộc";
+      if (astro.canDay.includes('Nhâm') || astro.canDay.includes('Quý')) elementStr = "Giản Hạ Thủy";
+      document.getElementById('elementDisplay').innerText = `Mệnh: ${elementStr}`;
+
+      document.getElementById('trucDisplay').innerText = `Trực ${astro.trucInfo.name}`;
+      document.getElementById('trucEffect').innerText = astro.trucInfo.tip;
+
+      document.getElementById('moonIcon').innerText = astro.moonIcon;
+      document.getElementById('moonPhaseName').innerText = astro.moonPhaseName;
+      document.getElementById('moonIllum').innerText = `Độ sáng: ${astro.illumPct}%`;
+
+      document.getElementById('directionDisplay').innerText = `Tài Thần: ${astro.dirs.tai}`;
+      document.getElementById('joyDirectionDisplay').innerText = `Hỷ Thần: ${astro.dirs.hy}`;
+
+      document.getElementById('solarTermDisplay').innerText = astro.currentTerm.name;
+      document.getElementById('seasonTip').innerText = astro.currentTerm.tip;
+
+      // Solunar Cards
+      document.getElementById('solunarMajor1').innerText = astro.major1Text;
+      document.getElementById('solunarMajor2').innerText = astro.major2Text;
+      document.getElementById('solunarMinor1').innerText = astro.minor1Text;
+      document.getElementById('solunarMinor2').innerText = astro.minor2Text;
+
+      // Giờ Hoàng Đạo Cards
+      const ausContainer = document.getElementById('auspiciousHoursGrid');
+      ausContainer.innerHTML = '';
+      CHIS.forEach((chi, idx) => {
+        let isAus = astro.auspiciousHourIndices.includes(idx);
+        let div = document.createElement('div');
+        div.className = `p-2.5 rounded-xl border transition ${
+          isAus 
+            ? 'bg-amber-950/30 border-amber-600/40 text-amber-200' 
+            : 'bg-slate-900/40 border-slate-800 text-slate-500'
+        }`;
+        div.innerHTML = `
+          <div class="flex justify-between items-center text-xs">
+            <span class="font-bold ${isAus ? 'text-amber-300' : 'text-slate-400'}">Giờ ${chi}</span>
+            <span class="text-[10px] px-1 rounded ${isAus ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-800 text-slate-500'}">
+              ${isAus ? 'Hoàng Đạo' : 'Hắc Đạo'}
+            </span>
+          </div>
+          <div class="text-[11px] font-mono mt-1 ${isAus ? 'text-amber-100' : 'text-slate-500'}">${CHI_HOURS[idx]}</div>
+        `;
+        ausContainer.appendChild(div);
+      });
+
+      // Lấy thời tiết thực tế
+      liveWeatherData = await fetchWeather(currentLat, currentLon);
+      const curr = liveWeatherData.current;
+      const currentHour = now.getHours();
+
+      // Cập nhật thẻ khí tượng
+      document.getElementById('valPressure').innerText = curr.surface_pressure.toFixed(1);
+      document.getElementById('valWindSpeed').innerText = curr.wind_speed_10m.toFixed(1);
+      document.getElementById('valTemp').innerText = curr.temperature_2m.toFixed(1);
+      document.getElementById('valHumidity').innerText = curr.relative_humidity_2m;
+
+      // Đánh giá chỉ số hiện tại
+      const evalNow = evaluateFeedingScore(astro, curr, currentHour);
+
+      // Cập nhật Đồng hồ tròn Gauge
+      document.getElementById('scoreValue').innerText = evalNow.totalScore;
+      document.getElementById('scoreRating').innerText = evalNow.ratingText;
+      document.getElementById('scoreRating').className = `mt-1 px-3 py-1 rounded-full text-xs font-bold border ${evalNow.ratingColor}`;
+
+      // Vòng tròn SVG: Chu vi ~ 515, dasharray 386.4
+      let offset = 386.4 - (evalNow.totalScore / 100) * 386.4;
+      document.getElementById('gaugeProgress').style.strokeDashoffset = offset;
+
+      // 5 Trụ Cột Bars
+      document.getElementById('factorPressureTxt').innerText = `${evalNow.pressureScore}%`;
+      document.getElementById('factorPressureBar').style.width = `${evalNow.pressureScore}%`;
+
+      document.getElementById('factorSolunarTxt').innerText = `${evalNow.solunarScore}%`;
+      document.getElementById('factorSolunarBar').style.width = `${evalNow.solunarScore}%`;
+
+      document.getElementById('factorWindTxt').innerText = `${evalNow.windScore}%`;
+      document.getElementById('factorWindBar').style.width = `${evalNow.windScore}%`;
+
+      document.getElementById('factorTempTxt').innerText = `${evalNow.tempScore}%`;
+      document.getElementById('factorTempBar').style.width = `${evalNow.tempScore}%`;
+
+      document.getElementById('factorAstroTxt').innerText = `${evalNow.astroScore}%`;
+      document.getElementById('factorAstroBar').style.width = `${evalNow.astroScore}%`;
+
+      // Đánh giá khí tượng chi tiết
+      document.getElementById('pressureEval').innerText = evalNow.pressureEvalText;
+      document.getElementById('windDirEval').innerText = `${evalNow.dirText} — ${evalNow.windEvalText}`;
+      document.getElementById('tempEval').innerText = evalNow.tempEvalText;
+      document.getElementById('humidityEval').innerText = curr.relative_humidity_2m > 85 ? "Ẩm cao sương mù sáng" : "Khô thoáng thông thoáng";
+
+      document.getElementById('meteorologySummary').innerHTML = `
+        Áp suất tại <strong>${currentLocationName}</strong> đạt <strong>${curr.surface_pressure.toFixed(1)} hPa</strong>. 
+        Gió <strong>${evalNow.dirText}</strong> với tốc độ <strong>${curr.wind_speed_10m.toFixed(1)} km/h</strong>. 
+        Mặt nước gợn sóng lăn tăn, kết hợp với Trực <strong>${astro.trucInfo.name}</strong> và pha <strong>${astro.moonPhaseName}</strong>, 
+        tạo điều kiện sinh vật phù du dâng lên tầng lửng, kích thích hệ tiêu hóa của cá chép, trắm đen và rô phi ăn mồi tích cực.
+      `;
+
+      document.getElementById('liveStatusTag').innerText = `Đã đồng bộ ${now.toLocaleTimeString('vi-VN')}`;
+
+      // Render 24h Timeline
+      renderTimeline(astro, liveWeatherData, currentHour);
+
+      // Render Cẩm nang loài cá
+      renderSpeciesAdvisory(evalNow.totalScore, curr.temperature_2m, astro);
+    }
+
+    /* =====================================================================
+     * 8. RENDER BẢN ĐỒ 24H TIMELINE TƯƠNG TÁC
+     * ===================================================================== */
+    function renderTimeline(astro, weather, currentHour) {
+      const container = document.getElementById('timeline24h');
+      container.innerHTML = '';
+
+      const hourlyP = weather.hourly?.surface_pressure || Array(24).fill(1014);
+      const hourlyT = weather.hourly?.temperature_2m || Array(24).fill(25);
+      const hourlyW = weather.hourly?.wind_speed_10m || Array(24).fill(8);
+
+      for (let h = 0; h < 24; h++) {
+        let hWeather = {
+          surface_pressure: hourlyP[h] || 1014,
+          temperature_2m: hourlyT[h] || 25,
+          wind_speed_10m: hourlyW[h] || 8,
+          wind_direction_10m: 140
+        };
+
+        let ev = evaluateFeedingScore(astro, hWeather, h);
+        let isCurrent = (h === currentHour);
+
+        let col = document.createElement('div');
+        col.className = `flex-1 flex flex-col items-center cursor-pointer p-2 rounded-xl transition duration-200 border ${
+          isCurrent 
+            ? 'bg-cyan-950/80 border-cyan-400 ring-2 ring-cyan-500/40' 
+            : 'bg-slate-900/50 border-slate-800 hover:border-slate-600'
+        }`;
+
+        // Color coding
+        let barBg = 'bg-slate-700';
+        if (ev.totalScore >= 80) barBg = 'bg-emerald-500 shadow-md shadow-emerald-500/30';
+        else if (ev.totalScore >= 65) barBg = 'bg-cyan-500 shadow-md shadow-cyan-500/20';
+        else if (ev.totalScore >= 50) barBg = 'bg-amber-500';
+
+        col.innerHTML = `
+          <!-- Hour label -->
+          <div class="text-[11px] font-mono font-bold ${isCurrent ? 'text-cyan-300' : 'text-slate-400'}">
+            ${h.toString().padStart(2, '0')}:00
+          </div>
+
+          <!-- Auspicious Tag / Major Indicator -->
+          <div class="h-4 flex items-center justify-center my-1 text-[10px]">
+            ${ev.isMajor ? '<span title="Giờ Major" class="text-amber-400 font-bold">⭐</span>' : 
+              ev.isMinor ? '<span title="Giờ Minor" class="text-cyan-400 font-bold">✨</span>' : 
+              ev.isAuspicious ? '<span title="Hoàng Đạo" class="text-amber-400/80">👑</span>' : ''}
+          </div>
+
+          <!-- Vertical Bar -->
+          <div class="w-full bg-slate-800 h-24 rounded-lg p-0.5 flex flex-col justify-end overflow-hidden">
+            <div class="${barBg} w-full rounded-md transition-all duration-500" style="height: ${ev.totalScore}%"></div>
+          </div>
+
+          <!-- Score -->
+          <div class="text-[11px] font-bold mt-1.5 ${isCurrent ? 'text-cyan-200' : 'text-slate-300'}">
+            ${ev.totalScore}%
+          </div>
+
+          <!-- Weather mini snippet -->
+          <div class="text-[10px] text-slate-400 font-mono mt-0.5">${Math.round(hWeather.temperature_2m)}°C</div>
+        `;
+
+        col.addEventListener('click', () => {
+          selectTimelineHour(h, ev, hWeather, astro);
+        });
+
+        container.appendChild(col);
+      }
+
+      // Default select current hour
+      let curEv = evaluateFeedingScore(astro, {
+        surface_pressure: hourlyP[currentHour] || 1014,
+        temperature_2m: hourlyT[currentHour] || 25,
+        wind_speed_10m: hourlyW[currentHour] || 8,
+        wind_direction_10m: 140
+      }, currentHour);
+      selectTimelineHour(currentHour, curEv, {
+        surface_pressure: hourlyP[currentHour] || 1014,
+        temperature_2m: hourlyT[currentHour] || 25,
+        wind_speed_10m: hourlyW[currentHour] || 8
+      }, astro);
+    }
+
+    function selectTimelineHour(h, ev, hWeather, astro) {
+      document.getElementById('hdBadge').innerText = `${h.toString().padStart(2, '0')}:00 - Điểm: ${ev.totalScore}%`;
+      document.getElementById('hdTitle').innerText = `Khung Giờ ${h}:00 — Đánh giá: ${ev.ratingText}`;
+      
+      let note = [];
+      if (ev.isMajor) note.push("⭐ Giờ Major: Đỉnh thiên đỉnh hút mồi mạnh nhất");
+      if (ev.isMinor) note.push("✨ Giờ Minor: Trăng mọc/lặn chuyển giao");
+      if (ev.isAuspicious) note.push("👑 Thuộc Giờ Hoàng Đạo xuất hành tốt");
+      if (note.length === 0) note.push("Khung giờ bình hòa thông thường.");
+
+      document.getElementById('hdDesc').innerText = note.join(" | ");
+      document.getElementById('hdPressure').innerText = `${hWeather.surface_pressure.toFixed(1)} hPa`;
+      document.getElementById('hdTemp').innerText = `${hWeather.temperature_2m.toFixed(1)}°C`;
+      document.getElementById('hdWind').innerText = `${hWeather.wind_speed_10m.toFixed(1)} km/h`;
+    }
+
+    /* =====================================================================
+     * 9. CẨM NANG CHIẾN THUẬT THEO LOÀI CÁ BẮC BỘ
+     * ===================================================================== */
+    function renderSpeciesAdvisory(globalScore, temp, astro) {
+      const species = [
+        {
+          name: "Cá Chép Sông & Hồ Bắc",
+          icon: "🐟",
+          scoreMod: globalScore >= 70 ? "+10%" : "0%",
+          depth: "Đáy bùn non (1.8m - 2.8m)",
+          bait: "Khoai lang ủ lên men, cám thơm, ngũ cốc ngọt dịu, giun đỏ",
+          seasonTip: "Thích nước 20-26°C. Khi áp suất ổn định cá rất thích rà mép cỏ ven bờ."
+        },
+        {
+          name: "Cá Trắm Đen (Săn Củ)",
+          icon: "🦈",
+          scoreMod: astro.lunarDay >= 14 || astro.lunarDay <= 2 ? "+20% (Đêm Trăng/Mùng 1)" : "-5%",
+          depth: "Đáy nước sâu (3.0m - 5.5m)",
+          bait: "Ốc vặn sống đập dập ủ tỏi ớt, cua đồng, ngô ngọt hạt to",
+          seasonTip: "Cực hạp săn vào giờ Major ban đêm. Cá trắm đen Bắc Bộ thích ăn vào khuya tĩnh mịch."
+        },
+        {
+          name: "Cá Trắm Cỏ",
+          icon: "🌿",
+          scoreMod: temp >= 22 ? "+15%" : "-15%",
+          depth: "Tầng lửng đến tầng đáy (1.2m - 2.2m)",
+          bait: "Ngọn cỏ non, lá sắn, ngô ngọt trần qua mật ong, cám xanh",
+          seasonTip: "Ưa gió Đông Nam ấm áp. Gặp hôm sóng lăn tăn cá sẽ nổi lên hớp lá cỏ ven hồ."
+        },
+        {
+          name: "Cá Rô Phi & Diêu Hồng",
+          icon: "🐠",
+          scoreMod: temp >= 24 ? "+25%" : "-30% (Sợ Lạnh)",
+          depth: "Tầng lửng đến sát bờ (0.8m - 1.8m)",
+          bait: "Cám tôm tanh, bột nhộng tằm, ruốc tép tươi, gan gà xay",
+          seasonTip: "Rất phàm ăn khi trưa hửng nắng ấm và có sóng tạo bọt khí oxy."
+        },
+        {
+          name: "Cá Trôi (Trôi Ấn, Trôi Đỏ)",
+          icon: "🐡",
+          scoreMod: globalScore >= 60 ? "+10%" : "-5%",
+          depth: "Đáy phẳng, chân kè đá (2.0m - 3.5m)",
+          bait: "Mồi ủ chua thối, cơm nguội lên men, bã bia, đậu tương rang",
+          seasonTip: "Đặc tính ăn dính miệng sát đáy bùn, nhấp phao tụt lụt. Rất nhạy vào xế chiều."
+        },
+        {
+          name: "Cá Lăng & Cá Nheo (Ăn Đêm)",
+          icon: "🐊",
+          scoreMod: astro.illumPct < 40 ? "+18% (Đêm Tối Trời)" : "+5%",
+          depth: "Hốc đá, đáy thụt sâu sông Đà, sông Lô (3.5m - 7m)",
+          bait: "Cá con băm vụn, lòng gà ủ chua tanh, mồi sống giãy giụa",
+          seasonTip: "Cá săn mồi săn đêm. Các đập thủy điện Hòa Bình, Thác Bà là điểm săn lý tưởng."
+        }
+      ];
+
+      const container = document.getElementById('speciesCardsContainer');
+      container.innerHTML = '';
+      species.forEach(sp => {
+        let card = document.createElement('div');
+        card.className = "p-4 rounded-xl bg-slate-900/60 border border-slate-800 hover:border-cyan-800 transition flex flex-col justify-between";
+        card.innerHTML = `
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center space-x-2">
+                <span class="text-xl">${sp.icon}</span>
+                <h4 class="font-bold text-slate-100 text-sm">${sp.name}</h4>
+              </div>
+              <span class="text-xs font-mono font-bold text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800">
+                ${sp.scoreMod}
+              </span>
+            </div>
+            <div class="text-xs text-slate-400 space-y-1.5 my-2">
+              <div><strong class="text-slate-300">Tầng nước:</strong> ${sp.depth}</div>
+              <div><strong class="text-slate-300">Mồi nhử chuẩn:</strong> ${sp.bait}</div>
+            </div>
+          </div>
+          <div class="text-[11px] text-teal-300/80 bg-slate-950/50 p-2 rounded-lg border border-slate-800/80 mt-2">
+            💡 <em>${sp.seasonTip}</em>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    /* =====================================================================
+     * 10. ÂM THANH THIÊN NHIÊN (SYNTHESIZED WATER & CHIME)
+     * ===================================================================== */
+    function toggleAmbientSound() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      if (isSoundPlaying) {
+        if (waterNoiseNode) {
+          waterNoiseNode.stop();
+          waterNoiseNode.disconnect();
+          waterNoiseNode = null;
+        }
+        isSoundPlaying = false;
+        document.getElementById('soundIcon').innerText = '🔇';
+        document.getElementById('soundLabel').innerText = 'Âm thanh hồ';
+      } else {
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        // White noise pink filter for flowing water lake sound
+        const bufferSize = 2 * audioCtx.sampleRate;
+        const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        let b0 = 0, b1 = 0, b2 = 0;
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          b0 = 0.99 * b0 + white * 0.05;
+          b1 = 0.95 * b1 + white * 0.05;
+          b2 = 0.90 * b2 + white * 0.05;
+          output[i] = (b0 + b1 + b2) * 0.15;
+        }
+
+        const whiteNoise = audioCtx.createBufferSource();
+        whiteNoise.buffer = noiseBuffer;
+        whiteNoise.loop = true;
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(450, audioCtx.currentTime);
+
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
+
+        whiteNoise.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        whiteNoise.start();
+        waterNoiseNode = whiteNoise;
+        isSoundPlaying = true;
+        document.getElementById('soundIcon').innerText = '🌊';
+        document.getElementById('soundLabel').innerText = 'Đang phát sóng nước';
+      }
+    }
+
+    /* =====================================================================
+     * 11. SỰ KIỆN & KHỞI CHẠY HỆ THỐNG
+     * ===================================================================== */
+    document.addEventListener('DOMContentLoaded', () => {
+      // Live Clock
+      function tickClock() {
+        const now = new Date();
+        document.getElementById('liveClock').innerText = now.toLocaleTimeString('vi-VN');
+        document.getElementById('liveSolarDate').innerText = `Dương lịch: ${now.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+
+        // Đồng hồ thời gian thực gắn trên từng thẻ
+        const p2 = (n) => n.toString().padStart(2, '0');
+        const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+        const timeStr = `${p2(now.getHours())}:${p2(now.getMinutes())}:${p2(now.getSeconds())}`;
+        const dateStr = `${p2(now.getDate())}/${p2(now.getMonth() + 1)}/${now.getFullYear()}`;
+        const wd = WEEKDAYS[now.getDay()];
+        document.querySelectorAll('.card-clock').forEach((el) => {
+          const fmt = el.dataset.format;
+          if (fmt === 'stack') {
+            el.querySelector('.card-clock-time').textContent = timeStr;
+            el.querySelector('.card-clock-date').textContent = `${wd}, ${dateStr}`;
+          } else {
+            el.querySelector('.card-clock-text').textContent =
+              fmt === 'full' ? `${timeStr} · ${wd}, ${dateStr}` : `${timeStr} · ${dateStr}`;
+          }
+        });
+      }
+      setInterval(tickClock, 1000);
+      tickClock();
+
+      // Trip date picker
+      const dateInput = document.getElementById('tripDatePicker');
+      const pad = (n) => n.toString().padStart(2, '0');
+      dateInput.value = `${currentSelectedDate.getFullYear()}-${pad(currentSelectedDate.getMonth() + 1)}-${pad(currentSelectedDate.getDate())}`;
+
+      dateInput.addEventListener('change', (e) => {
+        if (e.target.value) {
+          const [y, m, d] = e.target.value.split('-').map(Number);
+          currentSelectedDate = new Date(y, m - 1, d, new Date().getHours(), new Date().getMinutes());
+          updateDashboard();
+        }
+      });
+
+      document.getElementById('btnPickToday').addEventListener('click', () => {
+        currentSelectedDate = new Date();
+        dateInput.value = `${currentSelectedDate.getFullYear()}-${pad(currentSelectedDate.getMonth() + 1)}-${pad(currentSelectedDate.getDate())}`;
+        updateDashboard();
+      });
+
+      document.getElementById('btnPickTomorrow').addEventListener('click', () => {
+        const tom = new Date();
+        tom.setDate(tom.getDate() + 1);
+        currentSelectedDate = tom;
+        dateInput.value = `${currentSelectedDate.getFullYear()}-${pad(currentSelectedDate.getMonth() + 1)}-${pad(currentSelectedDate.getDate())}`;
+        updateDashboard();
+      });
+
+      document.getElementById('btnPickWeekend').addEventListener('click', () => {
+        const d = new Date();
+        const dayOfWeek = d.getDay(); // 0 is Sunday, 6 is Saturday
+        const distToSat = (6 - dayOfWeek + 7) % 7 || 7;
+        d.setDate(d.getDate() + distToSat);
+        currentSelectedDate = d;
+        dateInput.value = `${currentSelectedDate.getFullYear()}-${pad(currentSelectedDate.getMonth() + 1)}-${pad(currentSelectedDate.getDate())}`;
+        updateDashboard();
+      });
+
+      // Location Presets
+      const locSelect = document.getElementById('locationSelect');
+      locSelect.addEventListener('change', (e) => {
+        const [latStr, lonStr, name] = e.target.value.split(',');
+        currentLat = parseFloat(latStr);
+        currentLon = parseFloat(lonStr);
+        currentLocationName = name;
+        updateDashboard();
+      });
+
+      // GPS Button
+      document.getElementById('btnGps').addEventListener('click', () => {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              currentLat = pos.coords.latitude;
+              currentLon = pos.coords.longitude;
+              currentLocationName = `Tọa độ GPS (${currentLat.toFixed(2)}°N, ${currentLon.toFixed(2)}°E)`;
+              
+              // Thêm option vào select nếu chưa có
+              const opt = document.createElement('option');
+              opt.value = `${currentLat},${currentLon},${currentLocationName}`;
+              opt.innerText = `📍 Vị Trí Của Bạn (${currentLat.toFixed(2)}°, ${currentLon.toFixed(2)}°)`;
+              opt.selected = true;
+              locSelect.prepend(opt);
+              
+              updateDashboard();
+            },
+            (err) => {
+              alert("Không thể lấy tọa độ GPS tự động: " + err.message + ". Vui lòng chọn địa điểm Miền Bắc trong danh sách!");
+            }
+          );
+        } else {
+          alert("Trình duyệt không hỗ trợ định vị GPS.");
+        }
+      });
+
+      // Sound button
+      document.getElementById('btnSound').addEventListener('click', toggleAmbientSound);
+
+      // Khởi chạy lần đầu
+      updateDashboard();
+    });
+  </script>
+</body>
+</html>

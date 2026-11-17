@@ -1,0 +1,69 @@
+===== Tue 11/17/2026 19:16:52.69 =====
+GIT=
+KHONG_TIM_THAY_GIT
+Common
+EduCago
+Python
+Zalo
+File Not Found
+Activation-Renewal
+Bandicam
+Canon
+CocCoc
+CodeBlocks
+Common Files
+Google
+Internet Explorer
+KMPlayer 64X
+Microsoft Analysis Services
+Microsoft Office
+Microsoft SQL Server
+Microsoft Update Health Tools
+Microsoft.NET
+ModifiableWindowsApps
+Mozilla Firefox
+obs-studio
+RUXIM
+TikTok LIVE Studio
+Veyon
+Waves
+Windows Defender
+Windows Mail
+Windows Media Player
+Windows Multimedia Platform
+Windows NT
+Windows Photo Viewer
+Windows Portable Devices
+Windows Security
+WindowsPowerShell
+WinRAR
+Wondershare
+File Not Found
+antigravity-updater
+Bandisoft
+Bytedance
+CEF
+Claude-Data
+CocCoc
+Comms
+ConnectedDevicesPlatform
+CyberLink
+D3DSCache
+Google
+MediaSDK_Server
+Microsoft
+Microsoft Help
+Mozilla
+NEO
+Package Cache
+Packages
+pip
+PlaceholderTileLogoFolder
+Programs
+Publishers
+Temp
+VirtualStore
+Wondershare
+zalo-updater
+Zoom
+File Not Found
